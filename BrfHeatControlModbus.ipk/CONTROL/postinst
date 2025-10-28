@@ -1,0 +1,22 @@
+#!/bin/sh
+
+CONFIG_PATH="/etc/BrfHeatControlModbus.json"
+DEFAULT_CONFIG="/usr/share/BrfHeatControlModbus/etc/BrfHeatControlModbus.json"
+
+# Only copy default config if it doesn't already exist
+if [ ! -f "$CONFIG_PATH" ]; then
+	echo "using default config"
+    cp "$DEFAULT_CONFIG" "$CONFIG_PATH"
+else
+	echo "keeping old config"
+fi
+
+
+# Only run after installation
+[ "$1" = "configure" ] || exit 0
+
+# Enable and start the service
+/etc/init.d/BrfHeatControlModbus enable
+/etc/init.d/BrfHeatControlModbus start
+
+exit 0

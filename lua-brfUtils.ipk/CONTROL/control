@@ -1,0 +1,8 @@
+Package: lua-brfUtils
+Version: 0.8
+Depends: lua, lsof
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: browsem 
+Description: my own lua utilities

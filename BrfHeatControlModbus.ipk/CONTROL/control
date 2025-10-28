@@ -1,0 +1,8 @@
+Package: BrfHeatControlModbusModbus
+Version: 0.8
+Depends: lua, lua-eco, lua-eco-mqtt, lua-brfUtils
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: browsem 
+Description: Mqtt/modbus gateway and control module for mothers house
