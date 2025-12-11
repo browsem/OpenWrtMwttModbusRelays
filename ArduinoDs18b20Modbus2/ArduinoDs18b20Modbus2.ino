@@ -4,7 +4,7 @@
 #include <ModbusTCPSlave.h>
 #include <ModbusRTUSlave.h>
 #include "DS18B20_INT.h"
-
+#include "RandomMac.h"
 
 //define the onewire
 #define ONE_WIRE_BUS1 7
@@ -38,10 +38,17 @@ constexpr byte DefaultIP1[]={192, 168, 1, 1};
 IPAddress DefaultIP(192, 168, 1, 1);       // Static fallback IP
 
 // The IP address will be dependent on your local network:
-byte mac[] = { 0xF4, 0x18, 0x4C, 0xEB, 0xD2, 0x52 };
+byte mac[6];
 
 //define the relays
-constexpr uint8_t relayPins[] = { 2, 3, 4, 6, LED_BUILTIN };
+#pragma message("Compiling for: " ARDUINO_BOARD)
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOWIFIR4) || defined(ARDUINO_MINIMA) || defined(ARDUINO_UNOR4_WIFI) 
+  constexpr uint8_t relayPins[] = { 4,5,6,7,LED_TX,LED_RX};
+#else
+// For all other boards
+  constexpr uint8_t relayPins[] = { 4,5,6,7 };
+#endif
+
 constexpr uint8_t numRelays = sizeof(relayPins) / sizeof(relayPins[0]);
 
 enum eHoldingRegs : uint16_t {
@@ -110,10 +117,11 @@ void configurRegisters(){
 
 void InitTCP() {
   mb= &modbusTCP;
+  GetMyMac();
   configurRegisters();
   //set the registers
-  //modbus.configureCoils(coils, numCoils);
-  //modbus.configureDiscreteInputs(discreteInputs, numDiscreteInputs);
+  modbus.configureCoils(coils, numCoils);
+  modbus.configureDiscreteInputs(discreteInputs, numDiscreteInputs);
   // print your local IP address:
   //start the ethernet
   if (!Ethernet.begin(mac)){
@@ -124,7 +132,7 @@ void InitTCP() {
   server.begin();
 
   Flags.UseTcp = true;
-  /*
+  
   delay(1000);     // give the Ethernet shield a second to initialize
   mbTCP.server();  // Act as Modbus TCP server
 
@@ -136,14 +144,14 @@ void InitTCP() {
   mbTCP.onGetIreg(IREG_TEMP2, getTemperature);
   mbTCP.onGetIreg(IREG_IPADDRESS_12, IpToModbus);
   mbTCP.onGetIreg(IREG_IPADDRESS_34, IpToModbus);
-  */
+  
 }
 
 
 void InitRTU() {
   mb= &modbusRTU;
   //start the serial
-  /*
+  
   mbRTU.begin(&Serial);
   mbRTU.slave(1);
 
@@ -157,7 +165,7 @@ void InitRTU() {
   mbRTU.onGetIreg(IREG_TEMP2, getTemperature);
   mbRTU.onGetIreg(IREG_IPADDRESS_12, IpToModbus);
   mbRTU.onGetIreg(IREG_IPADDRESS_34, IpToModbus);
-  */
+  
 }
 
 
@@ -165,7 +173,7 @@ void setup() {
   //setup the relays as outputs
   for (uint8_t i = 0; i < numRelays; i++) {
     pinMode(relayPins[i], OUTPUT);
-    digitalWrite(relayPins[i], LOW);  // Default OFF
+    digitalWrite(relayPins[i], HIGH);  // Default OFF
   }
   // Here we start reading the temperature sensor
   Flags.TempSensor1 = sensor1.setResolution(9);
