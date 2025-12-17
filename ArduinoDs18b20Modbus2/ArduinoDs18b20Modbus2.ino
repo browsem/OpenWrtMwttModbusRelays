@@ -5,6 +5,24 @@
 #include <ModbusRTUSlave.h>
 #include "DS18B20_INT.h"
 #include "RandomMac.h"
+#include "txtStrings.h"
+
+
+#ifndef USBCON
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOWIFIR4) || defined(ARDUINO_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
+// This is an UNO R4 board with native USB
+#pragma message("defining USBCON")
+#define USBCON
+#endif
+#endif
+
+//Remove serial port1, if it doesnt exist
+#if defined(HAVE_HWSERIAL1) || defined(Serial1)
+
+#else
+#define Serial1 \
+  if (false) Serial
+#endif
 
 //define the onewire
 #define ONE_WIRE_BUS1 7
@@ -19,8 +37,8 @@ DS18B20_INT sensor2(&oneWire2);
 
 //define the modbus
 //RTU
- #define MODBUS_SERIAL Serial
- #define MODBUS_BAUD 9600
+#define MODBUS_SERIAL Serial
+#define MODBUS_BAUD 9600
 #define MODBUS_CONFIG SERIAL_8N1
 #define MODBUS_UNIT_ID 1
 #define dePin A3
@@ -31,22 +49,22 @@ EthernetServer server(MODBUS_TCP_SLAVE_DEFAULT_PORT);
 ModbusTCPSlave modbusTCP;
 
 //Dual, going for the gold here
-ModbusSlaveLogic* mb=nullptr;
+ModbusSlaveLogic* mb = nullptr;
 
 //Default ip adress for configuration
-constexpr byte DefaultIP1[]={192, 168, 1, 1};
-IPAddress DefaultIP(192, 168, 1, 1);       // Static fallback IP
+constexpr byte DefaultIP1[] = { 192, 168, 1, 1 };
+IPAddress CurrentIP(0, 0, 0, 0);  // Static fallback IP
 
 // The IP address will be dependent on your local network:
 byte mac[6];
 
 //define the relays
 #pragma message("Compiling for: " ARDUINO_BOARD)
-#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOWIFIR4) || defined(ARDUINO_MINIMA) || defined(ARDUINO_UNOR4_WIFI) 
-  constexpr uint8_t relayPins[] = { 4,5,6,7,LED_TX,LED_RX};
+#if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOWIFIR4) || defined(ARDUINO_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
+constexpr uint8_t relayPins[] = { 4, 5, 6, 7, LED_TX, LED_RX };
 #else
 // For all other boards
-  constexpr uint8_t relayPins[] = { 4,5,6,7 };
+constexpr uint8_t relayPins[] = { 4, 5, 6, 7 };
 #endif
 
 constexpr uint8_t numRelays = sizeof(relayPins) / sizeof(relayPins[0]);
@@ -82,46 +100,46 @@ uint16_t inputRegisters[nrOfeInputRegs];
 union {
   uint16_t stSettings;  // 16-bit value, perfect for a Modbus register
   struct {
-    uint16_t Using_DHCP : 1;
-    uint16_t bit1 : 1;
-    uint16_t bit2 : 1;
-    uint16_t bit3 : 1;
-    uint16_t bit4 : 1;
+    uint16_t UseTcp : 1;          //using tcp not rtu
+    uint16_t Using_DHCP : 1;      //using dhcp
+    uint16_t Using_StoredIp : 1;  //using the ip from config, not the fallback
+    uint16_t TempSensor1Active : 1;
+    uint16_t TempSensor2Active : 1;
     uint16_t bit5 : 1;
     uint16_t bit6 : 1;
     uint16_t free : 9;
   };
 } Settings;
 
+constexpr uint32_t blinkTime = 5000;
+uint32_t blinkStartTime = millis() - blinkTime;
 
-union {
-  uint8_t byte;
-  struct {
-    uint8_t UseTcp : 1;
-    uint8_t TempSensor1 : 1;
-    uint8_t TempSensor2 : 1;
-    uint8_t free : 5;
-  };
-} Flags;
+//------- Functions ---- Functions ---- Functions ---- Functions ---- Functions ---- Functions ---- Functions ---- Functions
 
+void IpToModbus() {
+  //run the send/recive modbus thinghy
+  IPAddress ip = CurrentIP;
+  if (Settings.UseTcp) {
+    IPAddress ip = Ethernet.localIP();
+  }
+  inputRegisters[IREG_IPADDRESS_12] = (ip[0] << 8) | ip[1];
+  inputRegisters[IREG_IPADDRESS_34] = (ip[2] << 8) | ip[3];
+}
 
 
 //-------- SETUP -------- SETUP -------- SETUP -------- SETUP -------- SETUP -------- SETUP -------- SETUP -------- SETUP
 
-void configurRegisters(){
+void configurRegisters() {
   mb->configureHoldingRegisters(holdingRegisters, nrOfeHoldingRegs);
   mb->configureInputRegisters(inputRegisters, nrOfeInputRegs);
-
 }
-
+/*
 
 void InitTCP() {
   mb= &modbusTCP;
   GetMyMac();
   configurRegisters();
-  //set the registers
-  modbus.configureCoils(coils, numCoils);
-  modbus.configureDiscreteInputs(discreteInputs, numDiscreteInputs);
+
   // print your local IP address:
   //start the ethernet
   if (!Ethernet.begin(mac)){
@@ -167,9 +185,34 @@ void InitRTU() {
   mbRTU.onGetIreg(IREG_IPADDRESS_34, IpToModbus);
   
 }
+*/
 
+
+void SerialStartup() {
+  Settings.UseTcp = 1;
+  Serial.begin(9600);
+  
+#if defined(USBCON)
+#pragma message("Usb connected serial detected")
+  unsigned long start = millis();
+  while (!Serial && (millis() - start < 5000)) {
+    // wait up to 2 seconds
+  }
+#endif
+  Serial.println(F("Serial Started"));
+
+  Serial1.begin(9600);
+
+  SerPrintln(F("Serial1 Started"));
+  SerPrintFromRomln(eMsg_Booting);
+  
+}
 
 void setup() {
+  SerialStartup();
+
+/*
+
   //setup the relays as outputs
   for (uint8_t i = 0; i < numRelays; i++) {
     pinMode(relayPins[i], OUTPUT);
@@ -187,6 +230,7 @@ void setup() {
   } else {
     InitRTU();
   }
+  */
 }
 
 void loop() {
