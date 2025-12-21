@@ -1,5 +1,5 @@
 #include <EEPROM.h>
-
+#include "SerPrint.h"
 extern byte mac[6];
 
 
@@ -33,13 +33,15 @@ bool isMACValid() {
 
 void PrintMac() {
   // Print MAC for debugging
-  Serial.print("Generated MAC: ");
+  //Serial.print("Generated MAC: ");
   for (int i = 0; i < 6; i++) {
     if (mac[i] < 0x10) Serial.print("0");
-    Serial.print(mac[i], HEX);
+    //Serial.print(mac[i], HEX);
+    SerPrint(mac[i], HEX);
     if (i < 5) Serial.print(":");
   }
-  Serial.println();
+  //Serial.println();
+  //SerPrintln();
 }
 
 
@@ -50,11 +52,13 @@ void GetMyMac() {
   if (!isMACValid()) {
     // Seed random generator with analog noise
     randomSeed(analogRead(A0));
-    Serial.println("No valid MAC found, generating new one...");
+   // SerPrintln(F("No valid MAC found, generating new one..."));
+    //Serial.println("No valid MAC found, generating new one...");
     generateRandomMAC();
     saveMACtoEEPROM();
   } else {
-    Serial.println("Using stored MAC from EEPROM.");
+    //Serial.println("Using stored MAC from EEPROM.");
+    //SerPrintln(F("Using stored MAC from EEPROM."));
   }
   PrintMac();
 }

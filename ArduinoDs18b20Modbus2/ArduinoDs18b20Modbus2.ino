@@ -6,12 +6,13 @@
 #include "DS18B20_INT.h"
 #include "RandomMac.h"
 #include "txtStrings.h"
+#include "SerPrint.h"
 
 
 #ifndef USBCON
 #if defined(ARDUINO_UNOR4_MINIMA) || defined(ARDUINO_UNOWIFIR4) || defined(ARDUINO_MINIMA) || defined(ARDUINO_UNOR4_WIFI)
 // This is an UNO R4 board with native USB
-#pragma message("defining USBCON")
+
 #define USBCON
 #endif
 #endif
@@ -24,9 +25,10 @@
   if (false) Serial
 #endif
 
-//define the onewire
+//define the onewire/temperature sensor
 #define ONE_WIRE_BUS1 7
 #define ONE_WIRE_BUS2 8
+
 
 OneWire oneWire1(ONE_WIRE_BUS1);
 OneWire oneWire2(ONE_WIRE_BUS2);
@@ -55,6 +57,7 @@ ModbusSlaveLogic* mb = nullptr;
 constexpr byte DefaultIP1[] = { 192, 168, 1, 1 };
 IPAddress CurrentIP(0, 0, 0, 0);  // Static fallback IP
 
+
 // The IP address will be dependent on your local network:
 byte mac[6];
 
@@ -68,6 +71,8 @@ constexpr uint8_t relayPins[] = { 4, 5, 6, 7 };
 #endif
 
 constexpr uint8_t numRelays = sizeof(relayPins) / sizeof(relayPins[0]);
+
+//-------- Enums --------  Enums --------  Enums --------  Enums --------  Enums --------  Enums --------
 
 enum eHoldingRegs : uint16_t {
   HREG_CMD = 40001,
@@ -89,12 +94,26 @@ enum eInputRegs : uint16_t {
   IREG_COUNT
 };
 
+enum eUseDHCP : uint8_t {
+  using_FixedIp = 0,
+  using_DHCP,
+  using_FallbackIp,
+  NoEthernetHardware,
+  eUseDHCP_Count
+};
+
+//\-------- Enums --------  Enums --------  Enums --------  Enums --------  Enums --------  Enums --------
 
 constexpr uint8_t nrOfeHoldingRegs = HREG_COUNT - HREG_CMD;
 constexpr uint8_t nrOfeInputRegs = IREG_COUNT - IREG_PRGSTATE;
 
 uint16_t holdingRegisters[nrOfeHoldingRegs];
 uint16_t inputRegisters[nrOfeInputRegs];
+
+struct StEEPROM {
+  int8_t UseDHCP;
+  IPAddress ip;
+};
 
 
 union {
@@ -133,18 +152,58 @@ void configurRegisters() {
   mb->configureHoldingRegisters(holdingRegisters, nrOfeHoldingRegs);
   mb->configureInputRegisters(inputRegisters, nrOfeInputRegs);
 }
-/*
+
 
 void InitTCP() {
-  mb= &modbusTCP;
+  SerPrintFromRomln(eMsg_configuration_of_tcp_started);
+  //Get mac adress from rom
   GetMyMac();
+  //get the stored values from the eeprom
+  StEEPROM loaded;
+  //cheking settings from eeprom
+  int8_t NetworkSetup = using_DHCP;
+  if ((0<=loaded.UseDHCP) && (loaded.UseDHCP<eUseDHCP_Count) ) {
+    NetworkSetup = loaded.UseDHCP;
+  } else {
+    //Start by trying dhcp if nothing else works
+    NetworkSetup = using_DHCP; 
+  }
+  SerPrint(F("NetworkSetup from eeprom: "));
+  SerPrintln(NetworkSetup);
+  Settings.Using_DHCP = 0;
+  Settings.Using_StoredIp = 0;
+  if (NetworkSetup == using_DHCP) {
+    //we start by trying dhcp, if thats in the cards
+    if (Ethernet.begin(mac)) {
+      //Found adress
+      Settings.Using_DHCP = 1;
+      SerPrintFromRomln(eMsg_ip_from_dhcp);
+      CurrentIP = Ethernet.localIP();
+    } else {
+      NetworkSetup = using_FallbackIp;
+    }
+
+   }
+  
+  SerPrint(F("NetworkSetup as found: "));
+  SerPrint(Settings.Using_DHCP);
+  SerPrintFromRom(eMsg_SpaceCommaSpace);
+  SerPrintln(Settings.Using_StoredIp);
+  // print your local IP address:
+}
+/*
+
+  //Use modbus tcp
+  mb= &modbusTCP;
+
+  
   configurRegisters();
 
-  // print your local IP address:
+  
   //start the ethernet
   if (!Ethernet.begin(mac)){
     //No mac adress, fall back to default IP
-    IPAddress FixedIP=DefaultIP;
+    IPAddress FixedIP=DefaultIP1[];
     Ethernet.begin(mac,FixedIP);
   }
   server.begin();
@@ -165,7 +224,7 @@ void InitTCP() {
   
 }
 
-
+/*
 void InitRTU() {
   mb= &modbusRTU;
   //start the serial
@@ -191,7 +250,7 @@ void InitRTU() {
 void SerialStartup() {
   Settings.UseTcp = 1;
   Serial.begin(9600);
-  
+
 #if defined(USBCON)
 #pragma message("Usb connected serial detected")
   unsigned long start = millis();
@@ -205,34 +264,35 @@ void SerialStartup() {
 
   SerPrintln(F("Serial1 Started"));
   SerPrintFromRomln(eMsg_Booting);
-  
 }
 
 void setup() {
   SerialStartup();
-
-/*
-
   //setup the relays as outputs
   for (uint8_t i = 0; i < numRelays; i++) {
     pinMode(relayPins[i], OUTPUT);
     digitalWrite(relayPins[i], HIGH);  // Default OFF
   }
+  SerPrintln(F("Relays are setup"));
+
+
+
   // Here we start reading the temperature sensor
-  Flags.TempSensor1 = sensor1.setResolution(9);
-  Flags.TempSensor2 = sensor2.setResolution(9);
+  Settings.TempSensor1Active = sensor1.setResolution(9);
+  Settings.TempSensor2Active = sensor2.setResolution(9);
 
   //now we see if ethernet is present
 
-  // Check for Ethernet hardware present
-  if (Ethernet.hardwareStatus() != EthernetNoHardware) {
-    InitTCP();
+  // setup the ethernet, and see if its present
+  InitTCP();
+}
+/*
   } else {
     InitRTU();
   }
-  */
+  
 }
-
+*/
 void loop() {
   // put your main code here, to run repeatedly:
 }
