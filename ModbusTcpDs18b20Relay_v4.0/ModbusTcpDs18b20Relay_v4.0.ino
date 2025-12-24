@@ -1,6 +1,4 @@
 #include "DualSerial/DualSerial.h"
-//#include "RandomMac.h"
-//#include "EthernetSetup.h"
 #include <ModbusTCPSlave.h>
 #include <ModbusRTUSlave.h>
 #include "DS18B20_INT.h"
@@ -23,8 +21,6 @@
   if (false) Serial
 #endif
 
-// Create a global instance that writes to both Serial and Serial1
-DualSerial Serials(Serial, Serial1);
 
 //---- Connected hardware ---- Connected hardware ---- Connected hardware ---- Connected hardware ---- Connected hardware
 
@@ -54,16 +50,37 @@ constexpr uint8_t numRelays = sizeof(relayPins) / sizeof(relayPins[0]);
 
 //\---- Connected hardware ---- Connected hardware ---- Connected hardware ---- Connected hardware ---- Connected hardware
 
+enum eHoldingRegs : uint16_t {
+  HREG_CMD = 40001,
+  HREG_SETTINGS,
+  HREG_IPADDRESS_12,
+  HREG_IPADDRESS_34,
+  HREG_RELAYS,
+  HREG_COUNT
+};
 
+enum eInputRegs : uint16_t {
+  IREG_PRGSTATE = 30001,
+  IREG_SETTINGS,
+  IREG_IPADDRESS_12,
+  IREG_IPADDRESS_34,
+  IREG_BUTTONS,
+  IREG_TEMP1,
+  IREG_TEMP2,
+  IREG_COUNT
+};
 
 
 //----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums
+constexpr int8_t eNo_Stored_Data = -1;
+
 enum eNetWorkSettings : int8_t {
-  using_FixedIp = 0,
-  using_DHCP,
-  using_FallbackIp,
-  NoEthernetHardware,
-  NetWorkSettings_Count
+  eUsing_FixedIp = 0,
+  eUsing_DHCP,
+  eUsing_FallbackIp,
+  eUse_Rtu,
+  eNoEthernetHardware,
+  eNetWorkSettings_Count
 };
 //\----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums ----- Enums
 
@@ -73,11 +90,38 @@ struct StEEPROM {
   byte mac[6];
   eNetWorkSettings NetWorkSettings;
   IPAddress ip;
+  unsigned long DhcpTimeout;
 };
 
 //\----- structs ----- structs ----- structs ----- structs ----- structs ----- structs ----- structs
 
-StEEPROM EEPROMdata;
+//----- Variables ----- Instances ----- Unions ----- Variables ----- Instances ----- Unions
+
+union {
+  uint16_t stSettings;  // 16-bit value, perfect for a Modbus register
+  struct {
+    uint16_t UseTcp : 1;          //using tcp not rtu
+    uint16_t Using_DHCP : 1;      //using dhcp
+    uint16_t Using_StoredIp : 1;  //using the ip from config, not the fallback
+    uint16_t TempSensor1Active : 1;
+    uint16_t TempSensor2Active : 1;
+    uint16_t bit5 : 1;
+    uint16_t bit6 : 1;
+    uint16_t free : 9;
+  };
+} Settings;
+
+DualSerial Serials(Serial, Serial1);  // Instance that writes to both Serial and Serial1
+//ModbusTCPSlave mbTCP;  // Declare ModbusTCP instance
+//ModbusRTUSlave modbus(MODBUS_SERIAL, dePin);       // Declare ModbusTCP instance
+ModbusSlaveLogic Modbus;  //Declare the modbus slave, that we use for anything but setup of the modbus
+
+StEEPROM EEPROMdata;  //Instance of saved EEPROM data
+
+IPAddress FallbackIp(192, 168, 1, 254);
+//----- Variables ----- Instances ----- Unions ----- Variables ----- Instances ----- Unions
+
+
 
 //---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup
 void StartSerial() {
@@ -123,7 +167,7 @@ void StartTemperatureSensors() {
   } else {
     Serials.println(F("Sensor 1 not found"));
   }
-  if (sensor2.getAddress(sensorAddress1)) {
+  if (sensor2.getAddress(sensorAddress2)) {
     Serials.print(F("Temperature sensor 2 id: "));
     printAddress("sensorAddress2: ", sensorAddress2);
   } else {
@@ -137,14 +181,18 @@ void setup() {
   StartTemperatureSensors();
   ReadEEPROM(0, EEPROMdata);
   EthernetSetup();
+  if (Settings.UseTcp = 0) {
+    //StartRtuModbus();
+  }
 }
 
 //\---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup ---- setup
 
 void loop() {
   // put your main code here, to run repeatedly:
-  if (true) {
+  /*if (true) {
     Serials.println(F("Reboot in bootloadermode"));
 
   }
+  */
 }

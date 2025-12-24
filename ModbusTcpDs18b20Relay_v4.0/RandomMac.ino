@@ -1,6 +1,7 @@
 
 
 
+
 void generateRandomMAC() {
   // First byte: 0x02 → locally administered, unicast
   EEPROMdata.mac[0] = 0x02;
@@ -44,13 +45,13 @@ void PrintMac() {
 void GetMyMac() {
 
   // Try to read MAC from EEPROM
-  ReadEEPROM(0,EEPROMdata);
+  ReadEEPROM(0, EEPROMdata);
   if (!isMACValid()) {
     // Seed random generator with analog noise
     randomSeed(analogRead(A0));
     Serial.println("No valid MAC found, generating new one...");
     generateRandomMAC();
-    saveEEPROMIfChanged(0,EEPROMdata);
+    saveEEPROMIfChanged(0, EEPROMdata);
   } else {
     Serial.println("Using stored MAC from EEPROM.");
   }
